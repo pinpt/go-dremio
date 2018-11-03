@@ -98,7 +98,7 @@ end:
 			time.Sleep(time.Millisecond)
 		}
 	}
-	resp, err := conn.get(conn.getResultURL(jobid, 0, 100))
+	resp, err := conn.get(conn.getResultURL(jobid, 0, conn.pagesize))
 	if err != nil {
 		return nil, err
 	}
