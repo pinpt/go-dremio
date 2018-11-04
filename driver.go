@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -34,6 +35,7 @@ type connection struct {
 	port     int
 	token    string
 	pagesize int
+	context  []string
 }
 
 // make sure our connection implements the full driver.Conn interfaces
@@ -59,7 +61,8 @@ var _ driver.StmtExecContext = (*statement)(nil)
 var _ driver.StmtQueryContext = (*statement)(nil)
 
 type query struct {
-	Query string `json:"sql"`
+	Query   string   `json:"sql"`
+	Content []string `json:"context,omitempty"`
 }
 
 func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
@@ -174,11 +177,23 @@ func (d *db) Open(name string) (driver.Conn, error) {
 		}
 	}
 
+	var context []string
+	c := u.Query().Get("context")
+	if c != "" {
+		// try and turn something like Samples."samples.dremio.com" -> [Samples, samples.dremio.com]
+		re := regexp.MustCompile(`("[\w+\.\s]+")|([\w]+)`)
+		toks := re.FindAllString(c, -1)
+		for _, tok := range toks {
+			context = append(context, strings.Replace(tok, `"`, "", -1))
+		}
+	}
+
 	conn := &connection{
 		hostname: u.Hostname(),
 		port:     port,
 		proto:    u.Scheme,
 		pagesize: pagesize,
+		context:  context,
 	}
 
 	// attempt to login to the connection
@@ -355,7 +370,7 @@ func (c *connection) Query(query string, args []driver.Value) (driver.Rows, erro
 //
 // QueryerContext must honor the context timeout and return when the context is canceled.
 func (c *connection) QueryContext(ctx context.Context, rawQuery string, args []driver.NamedValue) (driver.Rows, error) {
-	q := query{rawQuery}
+	q := query{rawQuery, c.context}
 	return q.queryNamed(ctx, c, args)
 }
 
@@ -385,7 +400,7 @@ func (s *statement) NumInput() int {
 //
 // Deprecated: Drivers should implement StmtQueryContext instead (or additionally).
 func (s *statement) Query(args []driver.Value) (driver.Rows, error) {
-	q := query{s.query}
+	q := query{s.query, s.conn.context}
 	return q.query(context.Background(), s.conn, args)
 }
 
@@ -394,7 +409,7 @@ func (s *statement) Query(args []driver.Value) (driver.Rows, error) {
 //
 // QueryContext must honor the context timeout and return when it is canceled.
 func (s *statement) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
-	q := query{s.query}
+	q := query{s.query, s.conn.context}
 	return q.queryNamed(ctx, s.conn, nargs)
 }
 
