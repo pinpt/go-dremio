@@ -62,17 +62,28 @@ var _ driver.StmtQueryContext = (*statement)(nil)
 
 type query struct {
 	Query   string   `json:"sql"`
-	Content []string `json:"context,omitempty"`
+	Context []string `json:"context,omitempty"`
 }
+
+var paramRe = regexp.MustCompile("\\s+(\\?)[\\s,]?")
 
 func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
 	if len(args) > 0 {
-		var s strings.Builder
-		s.WriteString(q.Query)
-		q.Query = s.String()
-	} else {
-		// FIXME support parameters
+		var index int
+		q.Query = paramRe.ReplaceAllStringFunc(q.Query, func(s string) string {
+			if index < len(args) {
+				val := args[index].Value
+				index++
+				switch v := val.(type) {
+				case string:
+					return fmt.Sprintf(` '%s' `, v)
+				}
+				return fmt.Sprintf(" %v ", val)
+			}
+			return s
+		})
 	}
+	fmt.Println(q.Query)
 	buf, err := json.Marshal(q)
 	if err != nil {
 		return nil, err
@@ -82,11 +93,19 @@ func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
 
 func (q query) build(args []driver.Value) (io.Reader, error) {
 	if len(args) > 0 {
-		var s strings.Builder
-		s.WriteString(q.Query)
-		q.Query = s.String()
-	} else {
-		// FIXME support parameters
+		var index int
+		q.Query = paramRe.ReplaceAllStringFunc(q.Query, func(s string) string {
+			if index < len(args) {
+				val := args[index]
+				index++
+				switch v := val.(type) {
+				case string:
+					return fmt.Sprintf(`'%s'`, v)
+				}
+				return fmt.Sprintf("%v", val)
+			}
+			return s
+		})
 	}
 	buf, err := json.Marshal(q)
 	if err != nil {
