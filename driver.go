@@ -65,22 +65,39 @@ type query struct {
 	Context []string `json:"context,omitempty"`
 }
 
-var paramRe = regexp.MustCompile("\\s+(\\?)[\\s,]?")
+var paramRe = regexp.MustCompile("\\s+(\\?)([\\s,]?)")
+
+type valuer func(index int) driver.Value
+
+func replacePlaceholders(q string, v valuer) string {
+	var index int
+	return paramRe.ReplaceAllStringFunc(q, func(s string) string {
+		val := v(index)
+		index++
+		if val != nil {
+			var res string
+			switch v := val.(type) {
+			case string:
+				res = fmt.Sprintf(` '%s' `, v)
+			default:
+				res = fmt.Sprintf(" %v ", val)
+			}
+			if strings.HasSuffix(s, ",") {
+				res += ","
+			}
+			return res
+		}
+		return s
+	})
+}
 
 func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
 	if len(args) > 0 {
-		var index int
-		q.Query = paramRe.ReplaceAllStringFunc(q.Query, func(s string) string {
+		q.Query = replacePlaceholders(q.Query, func(index int) driver.Value {
 			if index < len(args) {
-				val := args[index].Value
-				index++
-				switch v := val.(type) {
-				case string:
-					return fmt.Sprintf(` '%s' `, v)
-				}
-				return fmt.Sprintf(" %v ", val)
+				return args[index].Value
 			}
-			return s
+			return nil
 		})
 	}
 	fmt.Println(q.Query)
@@ -93,18 +110,11 @@ func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
 
 func (q query) build(args []driver.Value) (io.Reader, error) {
 	if len(args) > 0 {
-		var index int
-		q.Query = paramRe.ReplaceAllStringFunc(q.Query, func(s string) string {
+		q.Query = replacePlaceholders(q.Query, func(index int) driver.Value {
 			if index < len(args) {
-				val := args[index]
-				index++
-				switch v := val.(type) {
-				case string:
-					return fmt.Sprintf(`'%s'`, v)
-				}
-				return fmt.Sprintf("%v", val)
+				return args[index]
 			}
-			return s
+			return nil
 		})
 	}
 	buf, err := json.Marshal(q)
