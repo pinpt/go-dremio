@@ -100,7 +100,6 @@ func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
 			return nil
 		})
 	}
-	fmt.Println(q.Query)
 	buf, err := json.Marshal(q)
 	if err != nil {
 		return nil, err
