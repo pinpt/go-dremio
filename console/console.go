@@ -26,6 +26,7 @@ type Plugin struct {
 	Query       string
 	Description string
 	Callback    func(ctx context.Context, conn *sql.DB, input string) error
+	AfterQuery  func(ctx context.Context, res []map[string]interface{}, duration time.Duration) (bool, error)
 }
 
 var (
@@ -200,21 +201,21 @@ func testConnection(ctx context.Context, conn *sql.DB) error {
 		fmt.Println("failed")
 		return err
 	}
-	fmt.Println("succeded")
+	fmt.Println("succeeded")
 	return nil
 }
 
-func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, error) {
+func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, *Plugin, error) {
 	for _, p := range queryPlugins {
 		m, e := regexp.MatchString(p.Query, input)
 		if e != nil {
-			return false, e
+			return false, &p, e
 		}
 		if m {
-			return true, p.Callback(ctx, conn, input)
+			return true, &p, p.Callback(ctx, conn, input)
 		}
 	}
-	return false, nil
+	return false, nil, nil
 }
 
 func sqlPrompt(ctx context.Context, conn *sql.DB, query string) ([]map[string]interface{}, error) {
@@ -247,6 +248,14 @@ func sqlPrompt(ctx context.Context, conn *sql.DB, query string) ([]map[string]in
 	return masterData, nil
 }
 
+func trim(val string) string {
+	val = strings.TrimSpace(val)
+	if strings.HasSuffix(val, ";") {
+		return val[0 : len(val)-1]
+	}
+	return val
+}
+
 func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error {
 	shouldExit := false
 	for {
@@ -256,7 +265,7 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		var started time.Time
 		var pluginFound bool
 
-		rl.SetPrompt(" > ")
+		rl.SetPrompt("> ")
 		text, err = rl.Readline()
 		if err != nil {
 			if err == readline.ErrInterrupt {
@@ -274,7 +283,7 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			}
 		}
 		shouldExit = false
-		query := strings.TrimSpace(text)
+		query := trim(text)
 		if len(query) == 0 {
 			continue
 		}
@@ -282,7 +291,7 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			return nil
 		}
 		started = time.Now()
-		pluginFound, err = checkPlugin(ctx, conn, query)
+		pluginFound, plugin, err := checkPlugin(ctx, conn, query)
 		if err != nil {
 			goto errors
 		}
@@ -293,6 +302,15 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		data, err = sqlPrompt(ctx, conn, query)
 		if err != nil {
 			goto errors
+		}
+		if plugin != nil && plugin.AfterQuery != nil {
+			ok, err := plugin.AfterQuery(ctx, data, time.Since(started))
+			if err != nil {
+				goto errors
+			}
+			if !ok {
+				continue // if return false, don't print out, just continue
+			}
 		}
 		if data != nil {
 			var b []byte

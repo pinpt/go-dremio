@@ -14,19 +14,22 @@ import (
 )
 
 var showTables = Plugin{
-	Query:       "show tables",
+	Query:       "^show tables$",
 	Description: "Shows all tables",
 	Callback:    showTablesFunc,
+	AfterQuery:  nil,
 }
 var describeTables = Plugin{
-	Query:       "desc ",
+	Query:       "^desc ",
 	Description: "Call desc <table_name>",
 	Callback:    describeTablesFunc,
+	AfterQuery:  nil,
 }
 var showHelp = Plugin{
-	Query:       "help",
+	Query:       "^help$",
 	Description: "Shows this help dialog",
 	Callback:    showHelpFunc,
+	AfterQuery:  nil,
 }
 
 var regexpExample = Plugin{
@@ -36,10 +39,11 @@ var regexpExample = Plugin{
 		fmt.Println(input)
 		return nil
 	},
+	AfterQuery: nil,
 }
 
 var clearScreen = Plugin{
-	Query:       "clear",
+	Query:       "^clear$",
 	Description: "clears the screen",
 	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
 		cmd := exec.Command("clear")
