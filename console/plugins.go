@@ -17,19 +17,16 @@ var showTables = Plugin{
 	Query:       "^show tables$",
 	Description: "Shows all tables",
 	Callback:    showTablesFunc,
-	AfterQuery:  nil,
 }
 var describeTables = Plugin{
 	Query:       "^desc ",
 	Description: "Call desc <table_name>",
 	Callback:    describeTablesFunc,
-	AfterQuery:  nil,
 }
 var showHelp = Plugin{
 	Query:       "^help$",
 	Description: "Shows this help dialog",
 	Callback:    showHelpFunc,
-	AfterQuery:  nil,
 }
 
 var regexpExample = Plugin{
@@ -39,7 +36,6 @@ var regexpExample = Plugin{
 		fmt.Println(input)
 		return nil
 	},
-	AfterQuery: nil,
 }
 
 var clearScreen = Plugin{
