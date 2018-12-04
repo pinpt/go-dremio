@@ -81,7 +81,19 @@ type dremioCreds struct {
 	URL      string `json:"url"`
 }
 
+// SetCredentials prepopulates creditials but does not save them to dist
+func SetCredentials(username, password, url string) {
+	dremioUsername = username
+	dremioPassword = password
+	dremioURL = url
+}
+
 func setupCredentials() (bool, error) {
+
+	if dremioUsername != "" && dremioPassword != "" && dremioURL != "" {
+		return true, nil
+	}
+
 	if !fileutil.FileExists(dremioConfig) {
 		return false, nil
 	}
