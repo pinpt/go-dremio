@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/fatih/color"
@@ -33,6 +35,16 @@ var regexpExample = Plugin{
 	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
 		fmt.Println(input)
 		return nil
+	},
+}
+
+var clearScreen = Plugin{
+	Query:       "clear",
+	Description: "clears the screen",
+	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		return cmd.Run()
 	},
 }
 
@@ -122,5 +134,6 @@ func init() {
 	Register(showTables)
 	Register(describeTables)
 	Register(showHelp)
+	Register(clearScreen)
 	Register(regexpExample)
 }
