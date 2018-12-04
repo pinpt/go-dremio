@@ -18,7 +18,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/pinpt/go-common/fileutil"
 
-	_ "github.com/pinpt/go-dremio"
+	_ "github.com/pinpt/go-dremio/driver"
 )
 
 // Plugin ...
