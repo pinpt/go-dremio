@@ -15,32 +15,27 @@ import (
 
 var showTables = Plugin{
 	Query:       "^show tables$",
-	Description: "Shows all tables",
+	Usage:       "show tables",
+	Description: "Displays all of the tables in the current schema",
 	Callback:    showTablesFunc,
 }
 var describeTables = Plugin{
 	Query:       "^desc ",
-	Description: "Call desc <table_name>",
+	Usage:       "desc [table name]",
+	Description: "Provides a decription of the specified table or view",
 	Callback:    describeTablesFunc,
 }
 var showHelp = Plugin{
 	Query:       "^help$",
+	Usage:       "help",
 	Description: "Shows this help dialog",
 	Callback:    showHelpFunc,
 }
 
-var regexpExample = Plugin{
-	Query:       "^reg_example\\s",
-	Description: "Quick test for starts with",
-	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
-		fmt.Println(input)
-		return nil
-	},
-}
-
 var clearScreen = Plugin{
 	Query:       "^clear$",
-	Description: "clears the screen",
+	Usage:       "clear",
+	Description: "Clears the screen",
 	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
 		cmd := exec.Command("clear")
 		cmd.Stdout = os.Stdout
@@ -51,12 +46,18 @@ var clearScreen = Plugin{
 func showHelpFunc(ctx context.Context, conn *sql.DB, input string) error {
 	fmt.Println("Available commands:")
 	fmt.Println("")
-	var padding float64
+	padding := float64(20)
 	for _, p := range queryPlugins {
 		padding = math.Max(float64(len(p.Query)), padding)
 	}
 	for _, p := range queryPlugins {
-		fmt.Println(color.HiWhiteString("  " + pstrings.PadRight(p.Query, int(padding), ' ') + "\t\t" + color.CyanString(p.Description)))
+		var n string
+		if p.Usage != "" {
+			n = p.Usage
+		} else {
+			n = p.Query
+		}
+		fmt.Println(color.HiWhiteString(" " + pstrings.PadRight(n, int(padding), ' ') + "   " + color.CyanString(p.Description)))
 	}
 	fmt.Println("")
 	return nil
@@ -115,7 +116,7 @@ func describeTablesFunc(ctx context.Context, conn *sql.DB, query string) error {
 		tableType string
 	}
 	var all []res
-	var padding float64
+	padding := float64(20)
 	for rows.Next() {
 		var schema string
 		var name string
@@ -140,5 +141,4 @@ func init() {
 	Register(describeTables)
 	Register(showHelp)
 	Register(clearScreen)
-	Register(regexpExample)
 }

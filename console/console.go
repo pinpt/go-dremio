@@ -18,12 +18,14 @@ import (
 	"github.com/fatih/color"
 	"github.com/pinpt/go-common/fileutil"
 
+	// load the db driver
 	_ "github.com/pinpt/go-dremio/driver"
 )
 
 // Plugin ...
 type Plugin struct {
 	Query       string
+	Usage       string
 	Description string
 	Callback    func(ctx context.Context, conn *sql.DB, input string) error
 	AfterQuery  func(ctx context.Context, res []map[string]interface{}, duration time.Duration) (bool, error)
@@ -53,6 +55,7 @@ func Run() error {
 	var connURL *url.URL
 	var connString string
 	var credsExists bool
+	var autocomplete *readline.PrefixCompleter
 
 	ctx = context.Background()
 	rl, err = readline.New("")
@@ -68,7 +71,7 @@ func Run() error {
 		promptURL(rl)
 		promptUsername(rl)
 		promptPassword(rl)
-		if err := promptSaveCredsToFile(rl); err != nil {
+		if err = promptSaveCredsToFile(rl); err != nil {
 			return err
 		}
 	}
@@ -77,6 +80,18 @@ func Run() error {
 	if err != nil {
 		return err
 	}
+
+	autocomplete = readline.NewPrefixCompleter()
+	re := regexp.MustCompile("^[A-Za-z\\s]*")
+	for _, p := range queryPlugins {
+		if p.Usage != "" {
+			words := re.FindStringSubmatch(p.Usage)
+			item := readline.PcItem(words[0])
+			autocomplete.Children = append(autocomplete.Children, item)
+		}
+	}
+	rl.Config.AutoComplete = autocomplete
+
 	connString = fmt.Sprintf("%v://%v:%v@%v", connURL.Scheme, dremioUsername, dremioPassword, connURL.Host)
 	conn, err = sql.Open("dremio", connString)
 	if err != nil {
