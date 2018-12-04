@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,9 +18,15 @@ import (
 	"github.com/fatih/color"
 	"github.com/pinpt/go-common/fileutil"
 
-	pstrings "github.com/pinpt/go-common/strings"
 	_ "github.com/pinpt/go-dremio"
 )
+
+// Plugin ...
+type Plugin struct {
+	Query       string
+	Description string
+	Callback    func(ctx context.Context, conn *sql.DB, input string) error
+}
 
 var (
 	dremioURL      string
@@ -27,7 +34,14 @@ var (
 	dremioPassword string
 	dremioToken    string
 	dremioConfig   string
+
+	queryPlugins []Plugin
 )
+
+// Register registers plugin
+func Register(p Plugin) {
+	queryPlugins = append(queryPlugins, p)
+}
 
 // Run runs the sql console
 func Run() error {
@@ -180,7 +194,7 @@ func promptURL(rl *readline.Instance) {
 }
 
 func testConnection(ctx context.Context, conn *sql.DB) error {
-	fmt.Println("testing connection")
+	fmt.Print("INFO testing connection to dremio server .... ")
 	_, err := conn.QueryContext(ctx, "select * from INFORMATION_SCHEMA.CATALOGS")
 	if err != nil {
 		fmt.Println("failed")
@@ -190,113 +204,20 @@ func testConnection(ctx context.Context, conn *sql.DB) error {
 	return nil
 }
 
-// TODO: Make this prettier
-func showHelp() {
-	fmt.Print(`
-  help menu:
-	
-	  type "exit" to exit
-	  type "quit" to exit
-	  type any sql query for dremio
-`)
-}
-
-// handle special options, returns:
-//	- ignore	bool	Call "continue" on the for loop
-//	- exit		bool	Exit program
-//	- err		bool	Any error that might occur
-func promptOptions(input string) (bool, bool, error) {
-	if input == "exit" {
-		return false, true, nil
-	}
-	if input == "quit" {
-		return false, true, nil
-	}
-	if input == "help" {
-		showHelp()
-		return true, false, nil
-	}
-	return false, false, nil
-}
-
-func showTables(ctx context.Context, conn *sql.DB) error {
-	rows, err := conn.QueryContext(ctx, `SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA."TABLES"`)
-	if err != nil {
-		return err
-	}
-	type res struct {
-		Schema string `json:"TABLE_SCHEMA"`
-		Name   string `json:"TABLE_NAME"`
-		Type   string `json:"TABLE_TYPE"`
-	}
-	for rows.Next() {
-		var a res
-		rows.Scan(&a.Schema, &a.Name, &a.Type)
-		if a.Type == "TABLE" || a.Type == "VIEW" {
-			fmt.Println(color.HiWhiteString("  " + JoinWords([]string{a.Schema, a.Name}, ".")))
+func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, error) {
+	for _, p := range queryPlugins {
+		m, e := regexp.MatchString(p.Query, input)
+		if e != nil {
+			return false, e
+		}
+		if m {
+			return true, p.Callback(ctx, conn, input)
 		}
 	}
-	return nil
-}
-
-func dequote(val string) string {
-	if val[0:1] == `"` {
-		return val[1 : len(val)-1]
-	}
-	return val
-}
-
-func describeTables(ctx context.Context, conn *sql.DB, query string) error {
-	table := strings.TrimSpace(query[5:])
-	tok := strings.Split(table, ".")
-	sql := `SELECT * FROM INFORMATION_SCHEMA."COLUMNS"`
-	var hasschema bool
-	if len(tok) > 1 {
-		schemastrs := make([]string, 0)
-		for _, s := range tok[0 : len(tok)-1] {
-			schemastrs = append(schemastrs, dequote(s))
-		}
-		schema := strings.Join(schemastrs, ".")
-		table = dequote(tok[len(tok)-1])
-		hasschema = true
-		sql += `WHERE TABLE_SCHEMA = '` + schema + `' AND TABLE_NAME = '` + table + "' order by ORDINAL_POSITION"
-	} else {
-		sql += `WHERE TABLE_NAME = '` + table + "' order by TABLE_SCHEMA, ORDINAL_POSITION"
-	}
-	rows, err := conn.QueryContext(ctx, `SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA."TABLES"`)
-
-	if err != nil {
-		return err
-	}
-
-	type res struct {
-		Schema string `json:"TABLE_SCHEMA"`
-		Name   string `json:"COLUMN_NAME"`
-		Type   string `json:"DATA_TYPE"`
-	}
-
-	for rows.Next() {
-		var a res
-		rows.Scan(&a.Schema, &a.Name, &a.Type)
-		if hasschema {
-			fmt.Println(color.HiWhiteString("  " + pstrings.PadRight(a.Name, 50, ' ') + " " + color.CyanString(a.Type)))
-		} else {
-			fmt.Println(color.HiWhiteString("  " + pstrings.PadRight(JoinWords([]string{a.Schema, a.Name}, "."), 50, ' ') + " " + color.CyanString(a.Type)))
-		}
-	}
-	return nil
+	return false, nil
 }
 
 func sqlPrompt(ctx context.Context, conn *sql.DB, query string) ([]map[string]interface{}, error) {
-	if strings.ToLower(query) == "show tables" {
-		showTables(ctx, conn)
-		return nil, nil
-	}
-	if strings.HasPrefix(strings.ToLower(query), "desc ") {
-		describeTables(ctx, conn, query)
-		return nil, nil
-	}
-
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -333,6 +254,7 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		var err error
 		var data []map[string]interface{}
 		var started time.Time
+		var pluginFound bool
 
 		rl.SetPrompt(" > ")
 		text, err = rl.Readline()
@@ -356,17 +278,18 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		if len(query) == 0 {
 			continue
 		}
-		ignore, exit, err := promptOptions(query)
-		if exit {
+		if query == "exit" || query == "quit" {
 			return nil
 		}
-		if ignore {
-			continue
-		}
+		started = time.Now()
+		pluginFound, err = checkPlugin(ctx, conn, query)
 		if err != nil {
 			goto errors
 		}
-		started = time.Now()
+		if pluginFound {
+			fmt.Println(fmt.Sprintf("took %v", time.Since(started)))
+			continue
+		}
 		data, err = sqlPrompt(ctx, conn, query)
 		if err != nil {
 			goto errors
