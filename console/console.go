@@ -218,11 +218,13 @@ func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, *Plugin
 	return false, nil, nil
 }
 
-func sqlPrompt(ctx context.Context, conn *sql.DB, query string) ([]map[string]interface{}, error) {
+// Execute a query and return array of mapped results
+func Execute(ctx context.Context, conn *sql.DB, query string) ([]map[string]interface{}, error) {
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -299,7 +301,7 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			fmt.Println(fmt.Sprintf("took %v", time.Since(started)))
 			continue
 		}
-		data, err = sqlPrompt(ctx, conn, query)
+		data, err = Execute(ctx, conn, query)
 		if err != nil {
 			goto errors
 		}
