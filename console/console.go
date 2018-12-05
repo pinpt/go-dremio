@@ -219,15 +219,15 @@ func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, *Plugin
 }
 
 // Execute a query and return array of mapped results
-func Execute(ctx context.Context, conn *sql.DB, query string) ([]map[string]interface{}, error) {
+func Execute(ctx context.Context, conn *sql.DB, query string) ([]map[string]interface{}, []string, error) {
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	count := len(columns)
 	values := make([]interface{}, count)
@@ -239,7 +239,7 @@ func Execute(ctx context.Context, conn *sql.DB, query string) ([]map[string]inte
 	for rows.Next() {
 		err := rows.Scan(scanArgs...)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		m := make(map[string]interface{})
 		for i, v := range values {
@@ -247,7 +247,7 @@ func Execute(ctx context.Context, conn *sql.DB, query string) ([]map[string]inte
 		}
 		masterData = append(masterData, m)
 	}
-	return masterData, nil
+	return masterData, columns, nil
 }
 
 func trim(val string) string {
@@ -301,7 +301,7 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			fmt.Println(fmt.Sprintf("took %v", time.Since(started)))
 			continue
 		}
-		data, err = Execute(ctx, conn, query)
+		data, _, err = Execute(ctx, conn, query)
 		if err != nil {
 			goto errors
 		}
