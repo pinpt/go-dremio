@@ -18,15 +18,19 @@ import (
 	"github.com/fatih/color"
 	"github.com/pinpt/go-common/fileutil"
 
+	// load the db driver
 	_ "github.com/pinpt/go-dremio/driver"
 )
+
+type pluginAfterFunc func(ctx context.Context, res []map[string]interface{}, duration time.Duration) (bool, error)
 
 // Plugin ...
 type Plugin struct {
 	Query       string
+	Usage       string
 	Description string
 	Callback    func(ctx context.Context, conn *sql.DB, input string) error
-	AfterQuery  func(ctx context.Context, res []map[string]interface{}, duration time.Duration) (bool, error)
+	AfterQuery  pluginAfterFunc
 }
 
 var (
@@ -53,6 +57,7 @@ func Run() error {
 	var connURL *url.URL
 	var connString string
 	var credsExists bool
+	var autocomplete *readline.PrefixCompleter
 
 	ctx = context.Background()
 	rl, err = readline.New("")
@@ -68,7 +73,7 @@ func Run() error {
 		promptURL(rl)
 		promptUsername(rl)
 		promptPassword(rl)
-		if err := promptSaveCredsToFile(rl); err != nil {
+		if err = promptSaveCredsToFile(rl); err != nil {
 			return err
 		}
 	}
@@ -77,6 +82,18 @@ func Run() error {
 	if err != nil {
 		return err
 	}
+
+	autocomplete = readline.NewPrefixCompleter(readline.PcItem("select "))
+	re := regexp.MustCompile("^[A-Za-z\\s]*")
+	for _, p := range queryPlugins {
+		if p.Usage != "" {
+			words := re.FindStringSubmatch(p.Usage)
+			item := readline.PcItem(words[0])
+			autocomplete.Children = append(autocomplete.Children, item)
+		}
+	}
+	rl.Config.AutoComplete = autocomplete
+
 	connString = fmt.Sprintf("%v://%v:%v@%v", connURL.Scheme, dremioUsername, dremioPassword, connURL.Host)
 	conn, err = sql.Open("dremio", connString)
 	if err != nil {
@@ -205,14 +222,14 @@ func testConnection(ctx context.Context, conn *sql.DB) error {
 	return nil
 }
 
-func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, *Plugin, error) {
+func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, pluginAfterFunc, error) {
 	for _, p := range queryPlugins {
 		m, e := regexp.MatchString(p.Query, input)
 		if e != nil {
-			return false, &p, e
+			return false, p.AfterQuery, e
 		}
 		if m {
-			return true, &p, p.Callback(ctx, conn, input)
+			return true, p.AfterQuery, p.Callback(ctx, conn, input)
 		}
 	}
 	return false, nil, nil
@@ -293,11 +310,11 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			return nil
 		}
 		started = time.Now()
-		pluginFound, plugin, err := checkPlugin(ctx, conn, query)
+		pluginFound, afterQuery, err := checkPlugin(ctx, conn, query)
 		if err != nil {
 			goto errors
 		}
-		if pluginFound {
+		if pluginFound && afterQuery == nil {
 			fmt.Println(fmt.Sprintf("took %v", time.Since(started)))
 			continue
 		}
@@ -305,8 +322,8 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		if err != nil {
 			goto errors
 		}
-		if plugin != nil && plugin.AfterQuery != nil {
-			ok, err := plugin.AfterQuery(ctx, data, time.Since(started))
+		if afterQuery != nil {
+			ok, err := afterQuery(ctx, data, time.Since(started))
 			if err != nil {
 				goto errors
 			}

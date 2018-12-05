@@ -15,32 +15,27 @@ import (
 
 var showTables = Plugin{
 	Query:       "^show tables$",
-	Description: "Shows all tables",
+	Usage:       "show tables",
+	Description: "Displays all of the tables in the current schema",
 	Callback:    showTablesFunc,
 }
 var describeTables = Plugin{
 	Query:       "^desc ",
-	Description: "Call desc <table_name>",
+	Usage:       "desc [table name]",
+	Description: "Provides a decription of the specified table or view",
 	Callback:    describeTablesFunc,
 }
 var showHelp = Plugin{
 	Query:       "^help$",
+	Usage:       "help",
 	Description: "Shows this help dialog",
 	Callback:    showHelpFunc,
 }
 
-var regexpExample = Plugin{
-	Query:       "^reg_example\\s",
-	Description: "Quick test for starts with",
-	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
-		fmt.Println(input)
-		return nil
-	},
-}
-
 var clearScreen = Plugin{
 	Query:       "^clear$",
-	Description: "clears the screen",
+	Usage:       "clear",
+	Description: "Clears the screen",
 	Callback: func(ctx context.Context, conn *sql.DB, input string) error {
 		cmd := exec.Command("clear")
 		cmd.Stdout = os.Stdout
@@ -51,12 +46,18 @@ var clearScreen = Plugin{
 func showHelpFunc(ctx context.Context, conn *sql.DB, input string) error {
 	fmt.Println("Available commands:")
 	fmt.Println("")
-	var longest float64
+	padding := float64(20)
 	for _, p := range queryPlugins {
-		longest = math.Max(float64(len(p.Query)), float64(20))
+		padding = math.Max(float64(len(p.Query)), padding)
 	}
 	for _, p := range queryPlugins {
-		fmt.Println(color.HiWhiteString("  " + pstrings.PadRight(p.Query, int(longest), ' ') + " " + color.CyanString(p.Description)))
+		var n string
+		if p.Usage != "" {
+			n = p.Usage
+		} else {
+			n = p.Query
+		}
+		fmt.Println(color.HiWhiteString(" " + pstrings.PadRight(n, int(padding), ' ') + "   " + color.CyanString(p.Description)))
 	}
 	fmt.Println("")
 	return nil
@@ -92,7 +93,7 @@ func dequote(val string) string {
 func describeTablesFunc(ctx context.Context, conn *sql.DB, query string) error {
 	table := strings.TrimSpace(query[5:])
 	tok := strings.Split(table, ".")
-	sql := `SELECT * FROM INFORMATION_SCHEMA."COLUMNS"`
+	sql := `SELECT TABLE_SCHEMA, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA."COLUMNS" `
 	var hasschema bool
 	if len(tok) > 1 {
 		schemastrs := make([]string, 0)
@@ -106,26 +107,31 @@ func describeTablesFunc(ctx context.Context, conn *sql.DB, query string) error {
 	} else {
 		sql += `WHERE TABLE_NAME = '` + table + "' order by TABLE_SCHEMA, ORDINAL_POSITION"
 	}
-	rows, err := conn.QueryContext(ctx, `SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA."TABLES"`)
-
+	rows, err := conn.QueryContext(ctx, sql)
 	if err != nil {
 		return err
 	}
-
 	type res struct {
-		Schema string `json:"TABLE_SCHEMA"`
-		Name   string `json:"COLUMN_NAME"`
-		Type   string `json:"DATA_TYPE"`
+		tableName string
+		tableType string
 	}
-
+	var all []res
+	padding := float64(20)
 	for rows.Next() {
-		var a res
-		rows.Scan(&a.Schema, &a.Name, &a.Type)
+		var schema string
+		var name string
+		var each res
+		rows.Scan(&schema, &name, &each.tableType)
 		if hasschema {
-			fmt.Println(color.HiWhiteString("  " + pstrings.PadRight(a.Name, 50, ' ') + " " + color.CyanString(a.Type)))
+			each.tableName = name
 		} else {
-			fmt.Println(color.HiWhiteString("  " + pstrings.PadRight(JoinWords([]string{a.Schema, a.Name}, "."), 50, ' ') + " " + color.CyanString(a.Type)))
+			each.tableName = JoinWords([]string{schema, name}, ".")
 		}
+		padding = math.Max(float64(len(each.tableName)), padding)
+		all = append(all, each)
+	}
+	for _, r := range all {
+		fmt.Println(color.HiWhiteString(" " + pstrings.PadRight(r.tableName, int(padding), ' ') + "   " + color.CyanString(r.tableType)))
 	}
 	return nil
 }
@@ -135,5 +141,4 @@ func init() {
 	Register(describeTables)
 	Register(showHelp)
 	Register(clearScreen)
-	Register(regexpExample)
 }
