@@ -48,6 +48,21 @@ func Register(p Plugin) {
 	queryPlugins = append(queryPlugins, p)
 }
 
+// SetConfigFile sets the path for the config file, must be .json
+func SetConfigFile(p string) error {
+	if strings.HasPrefix(p, ".json") {
+		return fmt.Errorf("SetConfigFile failed, file path is not json")
+	}
+	d, e := fileutil.Resolve(p)
+	dremioConfig = d
+	return e
+}
+
+// ConfigFile returns the config file path
+func ConfigFile() string {
+	return dremioConfig
+}
+
 // Run runs the sql console
 func Run() error {
 	var rl *readline.Instance
@@ -353,5 +368,5 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dremioConfig = filepath.Join(usr.HomeDir, ".dremio_console.json")
+	SetConfigFile(filepath.Join(usr.HomeDir, ".dremio_console.json"))
 }

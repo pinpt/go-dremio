@@ -3,11 +3,9 @@ package cmd
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
-	"strings"
+	"os"
 
-	"github.com/fatih/color"
 	"github.com/pinpt/go-dremio/console"
 	"github.com/spf13/cobra"
 )
@@ -27,13 +25,15 @@ var consoleCmd = &cobra.Command{
 		console.SetCredentials(username, password, endpoint)
 
 		printPlugin := console.Plugin{
-			Query:       "^print\\s",
-			Description: "prints a silly message",
+			Query:       "^logout$",
+			Usage:       "logout",
+			Description: "deletes the config file and exists",
 			Callback: func(ctx context.Context, conn *sql.DB, input string) error {
-				parts := strings.Split(input, " ")
-				parts = parts[1:]
-				str := strings.Join(parts, " ")
-				fmt.Println(color.HiMagentaString(str))
+				er := os.Remove(console.ConfigFile())
+				if er != nil {
+					return er
+				}
+				os.Exit(0)
 				return nil
 			},
 		}
