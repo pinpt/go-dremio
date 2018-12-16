@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -63,6 +62,8 @@ var _ driver.StmtQueryContext = (*statement)(nil)
 type query struct {
 	Query   string   `json:"sql"`
 	Context []string `json:"context,omitempty"`
+
+	buf []byte
 }
 
 var paramRe = regexp.MustCompile("\\s+(\\?)([\\s,]?)")
@@ -91,7 +92,7 @@ func replacePlaceholders(q string, v valuer) string {
 	})
 }
 
-func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
+func (q query) buildNamed(args []driver.NamedValue) ([]byte, error) {
 	if len(args) > 0 {
 		q.Query = replacePlaceholders(q.Query, func(index int) driver.Value {
 			if index < len(args) {
@@ -100,14 +101,10 @@ func (q query) buildNamed(args []driver.NamedValue) (io.Reader, error) {
 			return nil
 		})
 	}
-	buf, err := json.Marshal(q)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader(buf), nil
+	return json.Marshal(q)
 }
 
-func (q query) build(args []driver.Value) (io.Reader, error) {
+func (q query) build(args []driver.Value) ([]byte, error) {
 	if len(args) > 0 {
 		q.Query = replacePlaceholders(q.Query, func(index int) driver.Value {
 			if index < len(args) {
@@ -116,15 +113,11 @@ func (q query) build(args []driver.Value) (io.Reader, error) {
 			return nil
 		})
 	}
-	buf, err := json.Marshal(q)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader(buf), nil
+	return json.Marshal(q)
 }
 
-func (q query) send(c *connection, r io.Reader) (driver.Rows, error) {
-	resp, err := c.post(c.getQueryURL(), r)
+func (q query) send(c *connection, buf []byte) (driver.Rows, error) {
+	resp, err := c.post(c.getQueryURL(), buf)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +136,8 @@ func (q query) send(c *connection, r io.Reader) (driver.Rows, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
 		return nil, fmt.Errorf("query error. status code: %v", resp.StatusCode)
 	}
-	return newResult(c, job.ID)
+	q.buf = buf
+	return newResult(c, job.ID, &q)
 }
 
 func (q query) query(ctx context.Context, c *connection, args []driver.Value) (driver.Rows, error) {
@@ -261,8 +255,8 @@ func (c *connection) getQueryURL() string {
 	return fmt.Sprintf("%s://%s:%d/api/v3/sql", c.proto, c.hostname, c.port)
 }
 
-func (c *connection) post(url string, r io.Reader) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodPost, url, r)
+func (c *connection) post(url string, buf []byte) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +392,7 @@ func (c *connection) Query(query string, args []driver.Value) (driver.Rows, erro
 //
 // QueryerContext must honor the context timeout and return when the context is canceled.
 func (c *connection) QueryContext(ctx context.Context, rawQuery string, args []driver.NamedValue) (driver.Rows, error) {
-	q := query{rawQuery, c.context}
+	q := query{rawQuery, c.context, nil}
 	return q.queryNamed(ctx, c, args)
 }
 
@@ -428,7 +422,7 @@ func (s *statement) NumInput() int {
 //
 // Deprecated: Drivers should implement StmtQueryContext instead (or additionally).
 func (s *statement) Query(args []driver.Value) (driver.Rows, error) {
-	q := query{s.query, s.conn.context}
+	q := query{s.query, s.conn.context, nil}
 	return q.query(context.Background(), s.conn, args)
 }
 
@@ -437,7 +431,7 @@ func (s *statement) Query(args []driver.Value) (driver.Rows, error) {
 //
 // QueryContext must honor the context timeout and return when it is canceled.
 func (s *statement) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
-	q := query{s.query, s.conn.context}
+	q := query{s.query, s.conn.context, nil}
 	return q.queryNamed(ctx, s.conn, nargs)
 }
 

@@ -1,12 +1,15 @@
 package drill
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"strings"
 	"time"
 )
 
@@ -75,7 +78,7 @@ func fetchNextPage(conn *connection, jobid string, offset int, total int, res *r
 	return nil
 }
 
-func newResult(conn *connection, jobid string) (driver.Rows, error) {
+func newResult(conn *connection, jobid string, query *query) (driver.Rows, error) {
 	jobResultURL := conn.getResultStatusURL(jobid)
 	var state jobState
 end:
@@ -91,6 +94,11 @@ end:
 		resp.Body.Close()
 		switch state.State {
 		case "FAILED":
+			if strings.Contains(*state.ErrorMessage, "SCHEMA_CHANGE ERROR") {
+				// this is a failure that needs to be restarted because the schema is in learning mode
+				time.Sleep(time.Millisecond * 20)
+				return query.send(conn, query.buf)
+			}
 			return nil, errors.New(*state.ErrorMessage)
 		case "COMPLETED":
 			break end
@@ -104,12 +112,25 @@ end:
 	}
 	defer resp.Body.Close()
 	var jr jobResults
-	if err := jr.Read(resp.Body); err != nil {
-		return nil, err
-	}
 	var result result
-	if err := fetchNextPage(conn, jobid, 0, jr.RowCount, &result); err != nil {
-		return nil, err
+	buf, _ := ioutil.ReadAll(resp.Body)
+	if bytes.HasPrefix(buf, []byte("{")) {
+		if err := jr.Read(bytes.NewReader(buf)); err != nil {
+			return nil, err
+		}
+		if err := fetchNextPage(conn, jobid, 0, jr.RowCount, &result); err != nil {
+			return nil, err
+		}
+	} else {
+		result.total = 0
+		result.offset = 0
+		if result.columns == nil {
+			result.columns = make(columns, 0)
+		}
+		result.rows = &rows{
+			parent: &result,
+			rows:   make([]map[string]interface{}, 0),
+		}
 	}
 	result.jobid = jobid
 	result.conn = conn
