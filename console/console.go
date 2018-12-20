@@ -40,6 +40,7 @@ var (
 	dremioToken    string
 	dremioConfig   string
 
+	historyFile  string
 	queryPlugins []Plugin
 )
 
@@ -56,6 +57,17 @@ func SetConfigFile(p string) error {
 	d, e := fileutil.Resolve(p)
 	dremioConfig = d
 	return e
+}
+
+// SetHistoryFile sets the history file to be used, call this before calling Run
+func SetHistoryFile(p string) error {
+	var err error
+	historyFile, err = fileutil.Resolve(p)
+	if err != nil {
+		return err
+	}
+	_, err = os.Create(historyFile)
+	return err
 }
 
 // ConfigFile returns the config file path
@@ -75,7 +87,10 @@ func Run() error {
 	var autocomplete *readline.PrefixCompleter
 
 	ctx = context.Background()
-	rl, err = readline.New("")
+	rl, err = readline.NewEx(&readline.Config{
+		HistoryFile: historyFile,
+	})
+
 	if err != nil {
 		return err
 	}
@@ -97,7 +112,6 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-
 	autocomplete = readline.NewPrefixCompleter(readline.PcItem("select "))
 	re := regexp.MustCompile("^[A-Za-z\\s]*")
 	for _, p := range queryPlugins {
@@ -108,7 +122,6 @@ func Run() error {
 		}
 	}
 	rl.Config.AutoComplete = autocomplete
-
 	connString = fmt.Sprintf("%v://%v:%v@%v", connURL.Scheme, dremioUsername, dremioPassword, connURL.Host)
 	conn, err = sql.Open("dremio", connString)
 	if err != nil {
