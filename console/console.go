@@ -90,7 +90,8 @@ func Run() error {
 
 	ctx = context.Background()
 	rl, err = readline.NewEx(&readline.Config{
-		HistoryFile: historyFile,
+		HistoryFile:            historyFile,
+		DisableAutoSaveHistory: true,
 	})
 
 	if err != nil {
@@ -297,24 +298,31 @@ func Execute(ctx context.Context, conn *sql.DB, query string) ([]map[string]inte
 	return masterData, columns, nil
 }
 
-func trim(val string) string {
+func trim(val string) (bool, string) {
 	val = strings.TrimSpace(val)
 	if strings.HasSuffix(val, ";") {
-		return val[0 : len(val)-1]
+		return true, val[0 : len(val)-1]
 	}
-	return val
+	return false, val
 }
 
 func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error {
 	shouldExit := false
+	queryArray := []string{}
 	for {
 		var text string
 		var err error
 		var data []map[string]interface{}
 		var started time.Time
 		var pluginFound bool
+		var afterQuery pluginAfterFunc
 
-		rl.SetPrompt("> ")
+		multiline := len(queryArray) > 0
+		if multiline {
+			rl.SetPrompt("  > ")
+		} else {
+			rl.SetPrompt("--> ")
+		}
 		text, err = rl.Readline()
 		if err != nil {
 			if err == readline.ErrInterrupt {
@@ -332,33 +340,51 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			}
 		}
 		shouldExit = false
-		query := trim(text)
-		if len(query) == 0 {
+		semicolon, query := trim(text)
+		if !multiline && len(query) == 0 {
 			continue
 		}
 		if query == "exit" || query == "quit" {
 			return nil
 		}
 		started = time.Now()
-		pluginFound, afterQuery, err := checkPlugin(ctx, conn, query)
-		if err != nil {
-			goto errors
-		}
-		if pluginFound && afterQuery == nil {
-			fmt.Println(fmt.Sprintf("took %v", time.Since(started)))
-			continue
-		}
-		data, _, err = Execute(ctx, conn, query)
-		if err != nil {
-			goto errors
-		}
-		if afterQuery != nil {
-			ok, err := afterQuery(ctx, data, time.Since(started))
+		if !multiline {
+			pluginFound, afterQuery, err = checkPlugin(ctx, conn, query)
 			if err != nil {
 				goto errors
 			}
-			if !ok {
-				continue // if return false, don't print out, just continue
+			if pluginFound && afterQuery == nil {
+				rl.SaveHistory(query)
+				fmt.Println(fmt.Sprintf("took %v", time.Since(started)))
+				continue
+			}
+		}
+		if strings.HasPrefix(strings.ToLower(query), "select") && !semicolon {
+			queryArray = append(queryArray, query)
+			continue
+		}
+		if multiline {
+			queryArray = append(queryArray, query)
+			if !semicolon {
+				continue
+			}
+			query = strings.Join(queryArray, " ")
+		}
+		rl.SaveHistory(query + ";")
+		data, _, err = Execute(ctx, conn, query)
+		queryArray = []string{}
+		if err != nil {
+			goto errors
+		}
+		if !multiline {
+			if afterQuery != nil {
+				ok, err := afterQuery(ctx, data, time.Since(started))
+				if err != nil {
+					goto errors
+				}
+				if !ok {
+					continue // if return false, don't print out, just continue
+				}
 			}
 		}
 		if data != nil {
