@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/pinpt/go-dremio/console"
 	"github.com/spf13/cobra"
@@ -21,9 +22,9 @@ var consoleCmd = &cobra.Command{
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
 		endpoint, _ := cmd.Flags().GetString("endpoint")
-
+		cwd, _ := os.Getwd()
 		console.SetCredentials(username, password, endpoint)
-
+		console.SetHistoryFile(filepath.Join(cwd, "history.txt"))
 		printPlugin := console.Plugin{
 			Query:       "^logout$",
 			Usage:       "logout",
