@@ -66,7 +66,9 @@ func SetHistoryFile(p string) error {
 	if err != nil {
 		return err
 	}
-	_, err = os.Create(historyFile)
+	if !fileutil.FileExists(historyFile) {
+		_, err = os.Create(historyFile)
+	}
 	return err
 }
 
