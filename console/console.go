@@ -318,14 +318,15 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		var afterQuery pluginAfterFunc
 
 		multiline := len(queryArray) > 0
-		if multiline {
-			rl.SetPrompt("  > ")
-		} else {
-			rl.SetPrompt("--> ")
-		}
+		rl.SetPrompt("> ")
 		text, err = rl.Readline()
 		if err != nil {
 			if err == readline.ErrInterrupt {
+				if multiline {
+					fmt.Print(`^C`)
+					queryArray = []string{}
+					continue
+				}
 				if text == "" {
 					if !shouldExit {
 						fmt.Println(`(To exit, press ^C again or type "exit")`)
@@ -344,11 +345,11 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 		if !multiline && len(query) == 0 {
 			continue
 		}
-		if query == "exit" || query == "quit" {
-			return nil
-		}
 		started = time.Now()
 		if !multiline {
+			if query == "exit" || query == "quit" {
+				return nil
+			}
 			pluginFound, afterQuery, err = checkPlugin(ctx, conn, query)
 			if err != nil {
 				goto errors
