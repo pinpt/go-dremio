@@ -94,6 +94,9 @@ end:
 		resp.Body.Close()
 		switch state.State {
 		case "FAILED":
+			if state.ErrorMessage == nil {
+				return nil, fmt.Errorf("unknown error running query: %v", string(query.buf))
+			}
 			if strings.Contains(*state.ErrorMessage, "SCHEMA_CHANGE ERROR") {
 				// this is a failure that needs to be restarted because the schema is in learning mode
 				time.Sleep(time.Millisecond * 20)
@@ -103,7 +106,7 @@ end:
 		case "COMPLETED":
 			break end
 		default:
-			time.Sleep(time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 	resp, err := conn.get(conn.getResultURL(jobid, 0, conn.pagesize))
