@@ -16,7 +16,7 @@ go get -u github.com/pinpt/go-dremio
 
 Use it like any normal SQL driver.
 
-```
+```go
 db, err := sql.Open("dremio", "https://user:pass@dremio.example.com")
 ```
 
