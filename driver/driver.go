@@ -233,11 +233,15 @@ func (d *db) Open(name string) (driver.Conn, error) {
 	}
 	defer resp.Body.Close()
 	type loginToken struct {
-		Token string `json:"token"`
+		Token        string  `json:"token"`
+		ErrorMessage *string `json:"errorMessage,omitempty"`
 	}
 	var token loginToken
 	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
 		return nil, fmt.Errorf("error decoding login token. %v", err)
+	}
+	if token.ErrorMessage != nil {
+		return nil, fmt.Errorf("error during login: %v", *token.ErrorMessage)
 	}
 	conn.token = token.Token
 	return conn, nil
