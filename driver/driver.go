@@ -99,7 +99,7 @@ func (q query) buildNamed(args []driver.NamedValue) ([]byte, error) {
 				return args[index].Value
 			}
 			return nil
-		})
+		}) + " " // dremio has an issue where you need to have a space at end of your query (from forums)
 	}
 	return json.Marshal(q)
 }
@@ -111,7 +111,7 @@ func (q query) build(args []driver.Value) ([]byte, error) {
 				return args[index]
 			}
 			return nil
-		})
+		}) + " " // dremio has an issue where you need to have a space at end of your query (from forums)
 	}
 	return json.Marshal(q)
 }
