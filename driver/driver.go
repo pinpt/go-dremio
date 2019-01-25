@@ -1,4 +1,4 @@
-package drill
+package driver
 
 import (
 	"bytes"
@@ -66,7 +66,7 @@ type query struct {
 	buf []byte
 }
 
-var paramRe = regexp.MustCompile("\\s+(\\?)([\\s,]?)")
+var paramRe = regexp.MustCompile("(\\?)")
 
 type valuer func(index int) driver.Value
 
