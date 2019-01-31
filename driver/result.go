@@ -105,6 +105,10 @@ end:
 			return nil, errors.New(*state.ErrorMessage)
 		case "COMPLETED":
 			break end
+		case "CANCELLATION_REQUESTED":
+			fmt.Println("query cancel requested, query:", string(query.buf))
+		case "CANCELED":
+			return nil, fmt.Errorf("query cancelled, query: %v", string(query.buf))
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
