@@ -1,10 +1,13 @@
 package console
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Word returns a dremio-friendly word
 func Word(str string) string {
-	if ok := reserverWords[strings.ToUpper(str)]; ok {
+	if ok := reserverWords[strings.ToUpper(str)]; ok || regexp.MustCompile(`^\d`).MatchString(str) {
 		return `"` + str + `"`
 	}
 	return str
