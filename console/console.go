@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/AlecAivazis/survey.v1"
+
 	"github.com/chzyer/readline"
 	"github.com/fatih/color"
 	"github.com/pinpt/go-common/fileutil"
@@ -103,11 +105,30 @@ func Run() error {
 		return err
 	}
 	if !credsExists {
-		promptURL(rl)
-		promptUsername(rl)
-		promptPassword(rl)
-		if err = promptSaveCredsToFile(rl); err != nil {
-			return err
+		urlprompt := &survey.Input{
+			Message: "Dremio url:",
+			Default: "http://localhost:9047",
+		}
+		survey.AskOne(urlprompt, &dremioURL, nil)
+		usrprompt := &survey.Input{
+			Message: "Dremio Username:",
+		}
+		survey.AskOne(usrprompt, &dremioUsername, nil)
+		pwdprompt := &survey.Password{
+			Message: "Dremio Password:",
+		}
+		survey.AskOne(pwdprompt, &dremioPassword, nil)
+		saveprompt := &survey.Select{
+			Message: "Save credentials for next time?",
+			Options: []string{"yes", "no"},
+			Default: "yes",
+		}
+		var res string
+		survey.AskOne(saveprompt, &res, nil)
+		if res == "yes" {
+			if err := saveCredentials(); err != nil {
+				return err
+			}
 		}
 	}
 	//  get the correct url format
@@ -133,6 +154,8 @@ func Run() error {
 	defer conn.Close()
 	err = testConnection(ctx, conn)
 	if err != nil {
+		fmt.Println(err, "logging out")
+		os.Remove(dremioConfig)
 		return err
 	}
 	return startPrompt(ctx, conn, rl)
@@ -196,63 +219,21 @@ func saveCredentials() error {
 	return f.Close()
 }
 
-func promptSaveCredsToFile(rl *readline.Instance) error {
-	for {
-		rl.SetPrompt("Save credentials? (y or n) ")
-		yn, _ := rl.Readline()
-		if strings.HasPrefix(yn, "n") {
-			return nil
-		} else if strings.HasPrefix(yn, "y") {
-			return saveCredentials()
-		}
-	}
-
-}
-func promptPassword(rl *readline.Instance) {
-	if dremioPassword != "" {
-		return
-	}
-	pswd, _ := rl.ReadPasswordEx("", readline.FuncListener(func(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool) {
-		str := "Enter password: "
-		for range line {
-			str += "*"
-		}
-		rl.SetPrompt(str)
-		rl.Refresh()
-		return nil, 0, false
-	}))
-	dremioPassword = strings.TrimSpace(string(pswd))
-}
-
-func promptUsername(rl *readline.Instance) {
-	if dremioUsername != "" {
-		return
-	}
-	rl.SetPrompt("Enter username:")
-	user, _ := rl.Readline()
-	dremioUsername = strings.TrimSpace(user)
-}
-
-func promptURL(rl *readline.Instance) {
-	if dremioURL != "" {
-		return
-	}
-	rl.SetPrompt("Enter url:")
-	ur, _ := rl.Readline()
-	dremioURL = strings.TrimSpace(ur)
-}
-
 func testConnection(ctx context.Context, conn *sql.DB) error {
 	fmt.Print("INFO testing connection to dremio server .... ")
 	_, err := conn.QueryContext(ctx, "select * from INFORMATION_SCHEMA.CATALOGS")
 	if err != nil {
-		fmt.Println("failed")
+		fmt.Println("failed...")
 		return err
 	}
 	fmt.Println("succeeded")
 	return nil
 }
 
+// returns:
+//	bool   - plugin found
+//	func   - plugin after function
+//	error  - error, nil if not error
 func checkPlugin(ctx context.Context, conn *sql.DB, input string) (bool, pluginAfterFunc, error) {
 	for _, p := range queryPlugins {
 		m, e := regexp.MatchString(p.Query, input)
@@ -394,7 +375,11 @@ func startPrompt(ctx context.Context, conn *sql.DB, rl *readline.Instance) error
 			if err != nil {
 				goto errors
 			}
-			fmt.Println(color.HiWhiteString(string(b)))
+			if len(b) == 0 {
+				fmt.Println(color.HiWhiteString("[]"))
+			} else {
+				fmt.Println(color.HiWhiteString(string(b)))
+			}
 			fmt.Println(fmt.Sprintf("%v rows in set (%v)", len(data), time.Since(started)))
 		}
 		continue

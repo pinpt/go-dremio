@@ -34,6 +34,14 @@
   version = "v1.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:400e113a367b511b9b09ca642ee11d9885485a93838526d697033af334a2fdde"
+  name = "github.com/kballard/go-shellquote"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "95032a82bc518f77982ea72343cc1ade730072f0"
+
+[[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
   name = "github.com/mattn/go-colorable"
   packages = ["."]
@@ -42,23 +50,31 @@
   version = "v0.0.9"
 
 [[projects]]
-  digest = "1:0981502f9816113c9c8c4ac301583841855c8cf4da8c72f696b3ebedf6d0e4e5"
+  digest = "1:e150b5fafbd7607e2d638e4e5cf43aa4100124e5593385147b0a74e2733d8b0d"
   name = "github.com/mattn/go-isatty"
   packages = ["."]
   pruneopts = "UT"
-  revision = "6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c"
-  version = "v0.0.4"
+  revision = "c2a7a6ca930a4cd0bc33a3f298eb71960732a3a7"
+  version = "v0.0.7"
 
 [[projects]]
-  digest = "1:eaf29c347bc5676dbdb9f8b48d866d8e178e21daaf2a7d1c8429132ea9f67196"
+  branch = "master"
+  digest = "1:2b32af4d2a529083275afc192d1067d8126b578c7a9613b26600e4df9c735155"
+  name = "github.com/mgutz/ansi"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "9520e82c474b0a04dd04f8a40959027271bab992"
+
+[[projects]]
+  digest = "1:094a0e3dc6bf29921dd490e8f996e3afef5f15bcc4dbd6519ae1bea78dd718ff"
   name = "github.com/pinpt/go-common"
   packages = [
     "fileutil",
     "strings",
   ]
   pruneopts = "UT"
-  revision = "b9f086f3da4a3beb62e46e213a331e0d1b50816c"
-  version = "4.0.18"
+  revision = "6bc9d4f6e33e5e6de428fa1a7ac637506acf97a3"
+  version = "4.0.23"
 
 [[projects]]
   digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
@@ -94,11 +110,23 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:71f29ade3ca8b29a03a0506acdaddb46060a1f36389ff62b7f873caaeb582b8f"
+  digest = "1:cf353a5a9ffb2d6f850e9c773e25388a425a70c270546480427ed069e87b136a"
   name = "golang.org/x/sys"
   packages = ["unix"]
   pruneopts = "UT"
-  revision = "7c4c994c65f702f41ed7d6620a2cb34107576a77"
+  revision = "4b34438f7a67ee5f45cc6132e2bad873a20324e9"
+
+[[projects]]
+  digest = "1:61e056dd0a189d9f1d07de809181f2ee5d36058d1ce4f9e58f443a1bea745ac0"
+  name = "gopkg.in/AlecAivazis/survey.v1"
+  packages = [
+    ".",
+    "core",
+    "terminal",
+  ]
+  pruneopts = "UT"
+  revision = "ee72c28b95a5ff3e227cfd403f556f0ef4b07ca5"
+  version = "v1.8.2"
 
 [solve-meta]
   analyzer-name = "dep"
@@ -109,7 +137,9 @@
     "github.com/pinpt/go-common/fileutil",
     "github.com/pinpt/go-common/strings",
     "github.com/spf13/cobra",
+    "github.com/spf13/pflag",
     "github.com/stretchr/testify/assert",
+    "gopkg.in/AlecAivazis/survey.v1",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

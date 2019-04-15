@@ -16,7 +16,6 @@ var consoleCmd = &cobra.Command{
 	Short: "starts a simpe console",
 	Long:  "simple console to make queries against a dremio database",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		// All of these are optional flags.
 		// If not provided, you'll be prompted at the start of the console
 		username, _ := cmd.Flags().GetString("username")
@@ -25,7 +24,7 @@ var consoleCmd = &cobra.Command{
 		cwd, _ := os.Getwd()
 		console.SetCredentials(username, password, endpoint)
 		console.SetHistoryFile(filepath.Join(cwd, "history.txt"))
-		printPlugin := console.Plugin{
+		logoutPlugin := console.Plugin{
 			Query:       "^logout$",
 			Usage:       "logout",
 			Description: "deletes the config file and exists",
@@ -38,10 +37,9 @@ var consoleCmd = &cobra.Command{
 				return nil
 			},
 		}
-		console.Register(printPlugin)
+		console.Register(logoutPlugin)
 
-		err := console.Run()
-		if err != nil {
+		if err := console.Run(); err != nil {
 			log.Fatal(err)
 		}
 	},

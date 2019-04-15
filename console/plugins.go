@@ -14,8 +14,8 @@ import (
 )
 
 var showTables = Plugin{
-	Query:       "^show tables$",
-	Usage:       "show tables",
+	Query:       `^(show tables)(\s+\w+|$)`,
+	Usage:       "show tables <optional portion of table name>",
 	Description: "Displays all of the tables in the current schema",
 	Callback:    showTablesFunc,
 }
@@ -63,22 +63,24 @@ func showHelpFunc(ctx context.Context, conn *sql.DB, input string) error {
 	return nil
 }
 
-func showTablesFunc(ctx context.Context, conn *sql.DB, input string) error {
-	rows, err := conn.QueryContext(ctx, `SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA."TABLES"`)
+func showTablesFunc(ctx context.Context, conn *sql.DB, query string) error {
+	var tablename string
+	parts := strings.Split(query, " ")
+	if len(parts) > 2 {
+		tablename = parts[2]
+	}
+	q := `SELECT CONCAT(TABLE_SCHEMA, '.', TABLE_NAME) FROM INFORMATION_SCHEMA."TABLES" WHERE TABLE_TYPE IN ('TABLE', 'VIEW')`
+	if tablename != "" {
+		q += ` AND CONCAT(TABLE_SCHEMA, '.', TABLE_NAME) LIKE '%%` + tablename + `%%'`
+	}
+	rows, err := conn.QueryContext(ctx, q)
 	if err != nil {
 		return err
 	}
-	type res struct {
-		Schema string `json:"TABLE_SCHEMA"`
-		Name   string `json:"TABLE_NAME"`
-		Type   string `json:"TABLE_TYPE"`
-	}
 	for rows.Next() {
-		var a res
-		rows.Scan(&a.Schema, &a.Name, &a.Type)
-		if a.Type == "TABLE" || a.Type == "VIEW" {
-			fmt.Println(color.HiWhiteString("  " + JoinWords([]string{a.Schema, a.Name}, ".")))
-		}
+		var name string
+		rows.Scan(&name)
+		fmt.Println(color.HiWhiteString("  " + JoinWords(strings.Split(name, "."), ".")))
 	}
 	return nil
 }
