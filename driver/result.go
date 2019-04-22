@@ -22,6 +22,7 @@ type jobState struct {
 }
 
 type jobResults struct {
+	Error    string                   `json:"errorMessage"`
 	RowCount int                      `json:"rowCount"`
 	Schema   []schema                 `json:"schema"`
 	Rows     []map[string]interface{} `json:"rows"`
@@ -57,8 +58,15 @@ func fetchNextPage(conn *connection, jobid string, offset int, total int, res *r
 	}
 	defer resp.Body.Close()
 	var jr jobResults
-	if err := jr.Read(resp.Body); err != nil {
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
 		return err
+	}
+	if err := jr.Read(bytes.NewReader(buf)); err != nil {
+		return err
+	}
+	if jr.Error != "" {
+		return errors.New(jr.Error)
 	}
 	res.total = total
 	res.offset += len(jr.Rows)
@@ -72,9 +80,7 @@ func fetchNextPage(conn *connection, jobid string, offset int, total int, res *r
 		parent: res,
 		rows:   make([]map[string]interface{}, 0),
 	}
-	for _, row := range jr.Rows {
-		res.rows.rows = append(res.rows.rows, row)
-	}
+	res.rows.rows = append(res.rows.rows, jr.Rows...)
 	return nil
 }
 
@@ -92,6 +98,8 @@ end:
 			return nil, fmt.Errorf("error decoding JSON response. %v", err)
 		}
 		resp.Body.Close()
+		// buf, _ := json.MarshalIndent(state, "", " ")
+		// fmt.Println(string(buf))
 		switch state.State {
 		case "FAILED":
 			if state.ErrorMessage == nil {
@@ -110,7 +118,7 @@ end:
 		case "CANCELED":
 			return nil, fmt.Errorf("query cancelled, query: %v", string(query.buf))
 		default:
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(time.Second)
 		}
 	}
 	resp, err := conn.get(conn.getResultURL(jobid, 0, conn.pagesize))
@@ -121,6 +129,7 @@ end:
 	var jr jobResults
 	var result result
 	buf, _ := ioutil.ReadAll(resp.Body)
+	// fmt.Println(string(buf))
 	if bytes.HasPrefix(buf, []byte("{")) {
 		if err := jr.Read(bytes.NewReader(buf)); err != nil {
 			return nil, err

@@ -137,7 +137,6 @@
     "github.com/pinpt/go-common/fileutil",
     "github.com/pinpt/go-common/strings",
     "github.com/spf13/cobra",
-    "github.com/spf13/pflag",
     "github.com/stretchr/testify/assert",
     "gopkg.in/AlecAivazis/survey.v1",
   ]
