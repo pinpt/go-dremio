@@ -35,7 +35,7 @@
 
 [[constraint]]
   name = "github.com/pinpt/go-common"
-  version = "4.0.18"
+  version = "5.3.1"
 
 [[constraint]]
   name = "github.com/stretchr/testify"

@@ -66,15 +66,15 @@
   revision = "9520e82c474b0a04dd04f8a40959027271bab992"
 
 [[projects]]
-  digest = "1:094a0e3dc6bf29921dd490e8f996e3afef5f15bcc4dbd6519ae1bea78dd718ff"
+  digest = "1:38ce982c8b45e4a472e6f250dbbe742df2057ed9ef2723af64633bf68f723711"
   name = "github.com/pinpt/go-common"
   packages = [
     "fileutil",
     "strings",
   ]
   pruneopts = "UT"
-  revision = "6bc9d4f6e33e5e6de428fa1a7ac637506acf97a3"
-  version = "4.0.23"
+  revision = "eb062ebc281c697e3acd4631e8ca54bbbc1359f1"
+  version = "5.3.1"
 
 [[projects]]
   digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
